@@ -1,0 +1,112 @@
+{
+  "name": "ADCExport",
+  "properties": {
+    "activities": [
+      {
+        "name": "Search Data Catalog",
+        "type": "WebActivity",
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "url": "URL to azure function for exporting business glossary",
+          "method": "POST",
+          "body": {
+            "companyCode": "HS"
+          }
+        }
+      },
+      {
+        "name": "Get business glossary",
+        "type": "WebActivity",
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "url": "URL to azure function for searching data catalog",
+          "method": "POST",
+          "body": {
+            "companyCode": "HS"
+          }
+        }
+      },
+      {
+        "name": "U-SQL Read data catalog",
+        "type": "DataLakeAnalyticsU-SQL",
+        "dependsOn": [
+          {
+            "activity": "Search Data Catalog",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "U-SQL Read business glossary",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "scriptPath": "usql/ReadDataCatalog.usql",
+          "degreeOfParallelism": 1,
+          "scriptLinkedService": {
+            "referenceName": "storage blob linked service for script",
+            "type": "LinkedServiceReference"
+          },
+          "parameters": {
+            "outputAdcObjectsAndColumns": "output/AzureDataCatalogObjectsAndColumns.csv",
+            "outputAdcObjectsTermTags": "output/AzureDataCatalogObjectsTermTags.csv",
+            "outputAdcColumnsTermTags": "output/AzureDataCatalogColumnsTermTags.csv",
+            "outputAdcObjectsAndTags": "output/AzureDataCatalogObjectsAndTags.csv"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "Data lake analytics account",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "U-SQL Read business glossary",
+        "type": "DataLakeAnalyticsU-SQL",
+        "dependsOn": [
+          {
+            "activity": "Get business glossary",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "scriptPath": "usql/ReadBusinessGlossary.usql",
+          "degreeOfParallelism": 1,
+          "scriptLinkedService": {
+            "referenceName": "storage blob linked service for script",
+            "type": "LinkedServiceReference"
+          },
+          "parameters": {
+            "outBg": "output/AzureDataCatalogBusinessGlossary.csv"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "data lake analytics account",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ]
+  }
+}

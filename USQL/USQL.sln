@@ -1,0 +1,61 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{182E2583-ECAD-465B-BB50-91101D7C24CE}") = "USQL-PBI Input", "USQL\USQL-PBI Input.usqlproj", "{D930B309-7220-4B6A-926B-E7A96A86A8EB}"
+EndProject
+Project("{182E2583-ECAD-465B-BB50-91101D7C24CE}") = "USQL-Column Tag List", "USQL-Column Tag List\USQL-Column Tag List.usqlproj", "{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PowerShell (Azure Functions)", "PowerShell (Azure Functions)", "{3ABE1508-7C3D-4E44-BC9A-274E4DB908BA}"
+	ProjectSection(SolutionItems) = preProject
+		AddColumnGlossaryTag.txt = AddColumnGlossaryTag.txt
+		ExportBusinessGlossary.ps = ExportBusinessGlossary.ps
+		SearchDataCatalog.ps = SearchDataCatalog.ps
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ADFv2", "ADFv2", "{AD145576-AF84-44FE-A736-1DA4E3E60FBF}"
+	ProjectSection(SolutionItems) = preProject
+		AddGlossaryTags.json = AddGlossaryTags.json
+		ExportDataCatalog.json = ExportDataCatalog.json
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Debug|x64.ActiveCfg = Debug|x64
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Debug|x64.Build.0 = Debug|x64
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Debug|x86.ActiveCfg = Debug|x86
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Debug|x86.Build.0 = Debug|x86
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Release|x64.ActiveCfg = Release|x64
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Release|x64.Build.0 = Release|x64
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Release|x86.ActiveCfg = Release|x86
+		{D930B309-7220-4B6A-926B-E7A96A86A8EB}.Release|x86.Build.0 = Release|x86
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Debug|x64.ActiveCfg = Debug|x64
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Debug|x64.Build.0 = Debug|x64
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Debug|x86.ActiveCfg = Debug|x86
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Debug|x86.Build.0 = Debug|x86
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Release|x64.ActiveCfg = Release|x64
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Release|x64.Build.0 = Release|x64
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Release|x86.ActiveCfg = Release|x86
+		{4BAC4E8A-49CC-4AFB-9C8C-72CAEA1490E5}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

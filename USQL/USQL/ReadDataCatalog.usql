@@ -1,0 +1,259 @@
+﻿REFERENCE ASSEMBLY [Newtonsoft.Json];
+REFERENCE ASSEMBLY [Microsoft.Analytics.Samples.Formats];
+
+// Input files
+DECLARE EXTERNAL @inputAzureDataCatalog string = "input" + DateTime.UtcNow.ToString("yyyyMMdd") +"-Page-{page}.json";
+DECLARE EXTERNAL @inBg string = "output filename from Readbusinessglossary.usql";
+
+
+// Output files
+DECLARE EXTERNAL @outputAdcObjectsAndColumns string = "/output/AzureDataCatalogObjectsAndColumns.csv";
+DECLARE EXTERNAL @outputAdcObjectsTermTags string = "/output/AzureDataCatalogObjectsTermTags.csv";
+DECLARE EXTERNAL @outputAdcColumnsTermTags string = "/output/AzureDataCatalogColumnTermTags.csv";
+DECLARE EXTERNAL @outputAdcObjectsAndTags string = "/output/AzureDataCatalogObjectsAndTags.csv";
+
+DECLARE EXTERNAL @outputPBIDimensions string = "/output/AzureDataCatalogPBIDim.csv";
+
+//read objects from data catalog; name, type and database
+@adcObjects =
+    EXTRACT 
+            id string,
+            name string,
+            friendlyName string,
+            sourceType string,
+            objectType string,
+            database string,
+            page string
+
+    FROM @inputAzureDataCatalog
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("results[*]", true, 
+    "content.id",
+    "content.properties.name", 
+    "content.properties.annotations.friendlyName.properties.friendlyName",
+    "content.properties.dataSource.sourceType",
+    "content.properties.dataSource.objectType",
+    "content.properties.dsl.address.database"
+    );
+
+//read schema information, this is in a subarray
+@adcAnnotationsSchema =
+    EXTRACT 
+            id string,
+            name string,
+            type string,
+            page string
+    FROM @inputAzureDataCatalog
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("results[*].content.annotations.schema.properties.columns[*]", true, 
+    "id",
+    "name",
+    "type"
+    );
+
+@adcAnnotationsSchema =
+    SELECT id,
+           id.Substring(0, id.IndexOf("/schema")) AS tableId,
+           name AS columnName,
+           type AS columnType
+    FROM @adcAnnotationsSchema;
+
+//we join the tables with the columns
+@adcObjectsWithColumns =
+    SELECT o.id,
+           name,
+           sourceType,
+           objectType,
+           database,
+           columnName,
+           columnType
+    FROM @adcObjects AS o
+         LEFT OUTER JOIN
+             @adcAnnotationsSchema AS schema
+         ON o.id == schema.tableId;
+
+@adcObjectsWithColumns =
+    SELECT id,
+           name,
+           sourceType,
+           objectType,
+           database,
+           columnName,
+           columnType,
+           id + "*" + columnName AS objectcolKey,
+           "column" AS level
+    FROM @adcObjectsWithColumns
+    WHERE !String.IsNullOrEmpty(columnName)
+    UNION ALL
+    SELECT DISTINCT id,
+                    name,
+                    sourceType,
+                    objectType,
+                    database,
+                    "" AS columnName,
+                    "" AS columnType,
+                    id AS objectcolKey,
+                    "object" AS level
+    FROM @adcObjectsWithColumns;
+
+
+OUTPUT @adcObjectsWithColumns
+TO @outputAdcObjectsAndColumns
+ORDER BY name, columnName
+USING Outputters.Csv(outputHeader : true);
+
+//reading of Glossary tags for objects
+@adcObjectTags=
+    EXTRACT id string,
+            termId string,
+            page string
+    FROM @inputAzureDataCatalog
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("results[*].content.annotations.termTags[*].properties", true,
+          "id",
+          "termId"
+          );
+
+@adcObjectTags =
+    SELECT id.Substring(0, id.IndexOf("/termTags")) AS tableId,
+           termId.ToLower() AS termId
+    FROM @adcObjectTags;
+
+//we join with business glossary
+@businessglossary =
+    EXTRACT [id] string,
+            [name] string,
+            [definition] string,
+            [description] string,
+            [Level1Name] string,
+            [Level2Name] string,
+            [Level3Name] string,
+            [Level4Name] string,
+            [Level5Name] string
+    FROM @inBg 
+    USING Extractors.Csv(skipFirstNRows:1);
+
+//we find the tableId
+@adcObjectTags =
+    SELECT tableId,
+           termId,
+           b.name,
+           b.Level1Name,
+           b.Level2Name,
+           b.Level3Name,
+           b.Level4Name,
+           b.Level5Name
+    FROM @adcObjectTags AS a
+         LEFT OUTER JOIN
+             @businessglossary AS b
+         ON a.termId == b.id;
+
+//we join in table
+@adcObjectTags =
+    SELECT DISTINCT //termTagId,
+           b.id AS tableId,
+           termId,
+           b.name AS tableName,
+           a.name AS termName,
+           a.Level1Name,
+           a.Level2Name,
+           a.Level3Name,
+           a.Level4Name,
+           a.Level5Name
+    FROM @adcObjectTags AS a
+         LEFT OUTER JOIN
+             @adcObjectsWithColumns AS b
+         ON a.tableId == b.id;
+
+          
+
+OUTPUT @adcObjectTags
+TO @outputAdcObjectsTermTags
+USING Outputters.Csv(outputHeader : true);
+
+//read columnTermTags
+
+//we treat the columnTermTags data as an array of termtags
+@adcColumnTermTags =
+EXTRACT id string,
+columnName string,
+            termId string,
+            page string
+    FROM @inputAzureDataCatalog
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("results[*].content.annotations.columnTermTags[*].properties", true,
+          "id",
+          "columnName",
+          "termId"
+          );
+
+@adcColumnTermTags =
+    SELECT id.Substring(0, id.IndexOf("/columnTermTags")) AS tableId,
+           columnName,
+           termId.ToLower() AS termId
+    FROM @adcColumnTermTags;
+
+@adcColumnTermTags =
+    SELECT b.name AS tableName,
+           a.columnName,
+           c.name AS termName,
+           c.Level1Name,
+           c.Level2Name,
+           c.Level3Name,
+           c.Level4Name,
+           c.Level5Name,
+           tableId,
+           termId,
+           tableId + "*" + a.columnName AS objectcolKey
+    FROM @adcColumnTermTags AS a
+         LEFT OUTER JOIN
+             @adcObjectsWithColumns AS b
+         ON a.tableId == b.id AND a.columnName == b.columnName
+         LEFT OUTER JOIN
+             @businessglossary AS c
+         ON a.termId == c.id;
+
+
+
+OUTPUT @adcColumnTermTags
+TO @outputAdcColumnsTermTags
+USING Outputters.Csv(outputHeader : true);
+
+//link between business glossary and columns/objects
+@adcPowerBILink =
+    SELECT objectcolKey,
+           termId,
+           "column" AS level
+    FROM @adcColumnTermTags
+    UNION ALL
+    SELECT tableId AS objectcolKey,
+           termId,
+           "object" AS level
+    FROM @adcObjectTags;
+    
+
+OUTPUT @adcPowerBILink
+TO @outputAdcObjectsAndTags
+USING Outputters.Csv(outputHeader : true);
+
+//dimensions for power bi    
+@adcPBIDimensions =
+    SELECT objectcolKey,
+           termId,
+           "column" AS level,
+           Level1Name,
+           Level2Name,
+           Level3Name,
+           Level4Name,
+           Level5Name
+    FROM @adcColumnTermTags
+    UNION ALL
+    SELECT tableId AS objectcolKey,
+           termId,
+           "object" AS level,
+           Level1Name,
+           Level2Name,
+           Level3Name,
+           Level4Name,
+           Level5Name
+    FROM @adcObjectTags;
+
+OUTPUT @adcPBIDimensions
+TO @outputPBIDimensions
+USING Outputters.Csv(outputHeader : true);

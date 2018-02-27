@@ -1,0 +1,59 @@
+#read input parameters
+$in = Get-Content $req -Raw | ConvertFrom-Json
+
+#azure authentication
+# POST method: $req
+$requestBody = Get-Content $req -Raw | ConvertFrom-Json
+
+$tableId = $requestBody.tableId
+$ColumnName = $requestBody.columnName
+$termId= $requestBody.termId
+
+#get autorhization token
+    Add-Type -Path 'D:\home\site\wwwroot\HttpTriggerPowershell1\Microsoft.IdentityModel.Clients.ActiveDirectory.dll'
+
+    $TenantID = "tenantId"
+
+    #Service Principal
+    $clientId = $ENV:APPSETTING_clientId
+    $ClientSecret = $ENV:APPSETTING_clientSecret
+
+    # Set Authority to Azure AD Tenant
+    $authority = 'https://login.windows.net/' + $TenantId
+
+    $upn = $clientId + "@" + $TenantID
+
+    # Set Resource URI to Azure Service Management API
+    $resourceURI = 'https://api.azuredatacatalog.com'
+
+    #redirect uri for client app
+    $redirectUri = "https://login.live.com/oauth20_desktop.srf"
+
+    $ClientCred = [Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential]::new($clientId, $ClientSecret)
+
+
+    $authContext = [Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext]::new($authority)
+    $authResult = $authContext.AcquireTokenAsync($resourceURI, $ClientCred)
+
+    $Token = $authResult.Result.CreateAuthorizationHeader()
+
+    $authHeader = @{
+    'Content-Type'='application/json'
+    'Authorization'=$Token
+    'x-ms-client-request-i' = [guid]::NewGuid()
+    }
+
+#call Data catalog api
+$Body = @{
+    properties=
+    @{
+        fromSourceSystem= 'false'
+        key = [guid]::NewGuid()
+        columnName= $ColumnName
+        termId= $termId
+    }
+} | ConvertTo-Json
+
+# AddGlossaryTag
+$uri = "https://api.azuredatacatalog.com/catalogs/DefaultCatalog/views/tables/" + $TableId + "/columnTermTags?api-version=2016-03-30"
+$response = Invoke-RestMethod -Uri $uri –Headers $authHeader -Body $Body  –Method POST –Verbose 

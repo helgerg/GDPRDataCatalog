@@ -1,0 +1,158 @@
+﻿REFERENCE ASSEMBLY [Newtonsoft.Json];
+REFERENCE ASSEMBLY [Microsoft.Analytics.Samples.Formats];
+
+// Input files
+DECLARE EXTERNAL @inputAzureDataCatalog string = "input/DataCatalogExport-" + DateTime.UtcNow.ToString("yyyyMMdd") +"-Page-{page}.json";
+DECLARE EXTERNAL @outBg string = "output filename";
+
+// Output files
+DECLARE EXTERNAL @outputAdcColumnAndTagList string = "output/AzureDataCatalogColumnAndTagsList.csv";
+
+//read objects
+@adcObjects =
+    EXTRACT 
+            id string,
+            name string,
+            friendlyName string,
+            sourceType string,
+            objectType string,
+            database string,
+            page string
+
+    FROM @inputAzureDataCatalog
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("results[*]", true, 
+    "content.id",
+    "content.properties.name", 
+    "content.properties.annotations.friendlyName.properties.friendlyName",
+    "content.properties.dataSource.sourceType",
+    "content.properties.dataSource.objectType",
+    "content.properties.dsl.address.database"
+    );
+
+//read schema information, this is in a subarray
+@adcAnnotationsSchema =
+    EXTRACT 
+            id string,
+            name string,
+            type string,
+            page string
+    FROM @inputAzureDataCatalog
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("results[*].content.annotations.schema.properties.columns[*]", true, 
+    "id",
+    "name",
+    "type"
+    );
+
+@adcAnnotationsSchema =
+    SELECT id,
+           id.Substring(0, id.IndexOf("/schema")) AS tableId,
+           name AS columnName,
+           type AS columnType
+    FROM @adcAnnotationsSchema;
+
+//we join the tables with the columns
+@adcObjectsWithColumns =
+    SELECT o.id,
+           name,
+           sourceType,
+           objectType,
+           database,
+           columnName,
+           columnType
+    FROM @adcObjects AS o
+         LEFT OUTER JOIN
+             @adcAnnotationsSchema AS schema
+         ON o.id == schema.tableId;
+
+//read columnTags
+@adcColumnTermTags =
+EXTRACT id string,
+columnName string,
+            termId string,
+            page string
+    FROM @inputAzureDataCatalog
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("results[*].content.annotations.columnTermTags[*].properties", true,
+          "id",
+          "columnName",
+          "termId"
+          );
+
+@adcColumnTermTags =
+    SELECT id.Substring(0, id.IndexOf("/columnTermTags")) AS tableId,
+           columnName,
+           termId.ToLower() AS termId
+    FROM @adcColumnTermTags;
+
+@businessglossary =
+    EXTRACT [id] string,
+            [name] string,
+            [definition] string,
+            [description] string,
+            [Level1Name] string,
+            [Level2Name] string,
+            [Level3Name] string,
+            [Level4Name] string,
+            [Level5Name] string
+    FROM @outBg
+    USING Extractors.Csv(skipFirstNRows:1);
+
+@businessglossary =
+    SELECT *
+    FROM @businessglossary
+    //assumes that you have a root node for Business Glossary called GDPR
+    WHERE Level1Name == "GDPR" AND !String.IsNullOrEmpty(Level2Name);
+
+@test =
+    SELECT objects.database,
+           objects.id.Substring(objects.id.IndexOf("tables/") + 7) AS tableId,
+           objects.name AS tableName,
+           objects.columnName,
+           bg.id AS bgId,
+           bg.name AS bgTermName
+    FROM @businessglossary AS bg
+         RIGHT OUTER JOIN
+             @adcColumnTermTags AS tags
+         ON
+         tags.termId == bg.id
+         RIGHT OUTER JOIN
+             @adcObjectsWithColumns AS objects
+         ON tags.tableId == objects.id
+         AND tags.columnName == objects.columnName;
+
+@test =
+    SELECT database,
+           tableId,
+           tableName,
+           columnName,
+           SUM(bgTermName == "term name 1"? 1 : 0) AS [term name 1],
+           //repeat (create this list in excel)..
+           SUM(bgTermName == "term name n"? 1 : 0) AS [term name n]
+           
+
+    FROM @test
+    GROUP BY database,
+             tableId,
+             tableName,
+             columnName;
+
+@test =
+    SELECT database,
+           tableId,
+           tableName,
+           columnName,
+           [term name 1] + [term name n]==0 ? "No" : "Yes" AS hasTag,
+           [term name 1] > 0 ? "Yes" : "" AS [term name 1],
+           //..
+           [term name n] > 0 ? "Yes" : "" AS [term name n]
+
+    FROM @test
+    //limit to one database
+    WHERE database == "limit";
+
+OUTPUT @test
+TO @outputAdcTest
+ORDER BY database,
+         tableName,
+         columnName
+USING Outputters.Csv(outputHeader : true);
+

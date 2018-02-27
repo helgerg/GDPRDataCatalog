@@ -1,0 +1,60 @@
+﻿REFERENCE ASSEMBLY [Newtonsoft.Json];
+REFERENCE ASSEMBLY [Microsoft.Analytics.Samples.Formats];
+
+//the list we made with CreateColumnAndTagList
+DECLARE EXTERNAL @inOldList = "output/AzureDataCatalogColumnAndTagsList.csv";
+//the file after added tags
+DECLARE EXTERNAL @inNewList = "output/AzureDataCatalogColumnAndTagsListFilled.csv";
+
+DECLARE EXTERNAL @out = "out/AzureDataCatalogColumnTagListToFunction.json";
+
+@oldList =
+    EXTRACT [database] string,
+            [tableId] Guid,
+            [tableName] string,
+            [columnName] string,
+            [hasTag] string,
+            [term name 1] string,
+            //..
+            [term name n] string
+    FROM @inOldList
+    USING Extractors.Csv(skipFirstNRows:1);
+
+//replace term names wih business glossary id
+@oldList =
+    SELECT tableId, columnName, !String.IsNullOrEmpty([term name 1]) ?"https://092f5820-4beb-488c-9129-7b9af341fdab-hmdatacatalog01.api.datacatalog.azure.com/catalogs/hmdatacatalog01/glossaries/hmdatacatalog01/terms/15f6bbbb-8023-46f3-a548-69ada55622e5":"NA" AS termId FROM @oldList UNION ALL
+//repeat
+SELECT tableId, columnName, !String.IsNullOrEmpty([term name n]) ?"https://092f5820-4beb-488c-9129-7b9af341fdab-hmdatacatalog01.api.datacatalog.azure.com/catalogs/hmdatacatalog01/glossaries/hmdatacatalog01/terms/d205fb2a-7525-4ae4-a18e-a4a7766bd01a":"NA" AS termId FROM @oldList;
+
+@oldList = SELECT * FROM @oldList WHERE termId != "NA";
+
+@newList =
+    EXTRACT [database] string,
+            [tableId] Guid,
+            [tableName] string,
+            [columnName] string,
+            [hasTag] string,
+            [term name 1] string,
+            //..
+            [term name n] string
+    FROM @inNewList
+    USING Extractors.Text(skipFirstNRows:1, delimiter: ';' );
+
+
+@newList =
+       SELECT tableId, columnName, !String.IsNullOrEmpty([term name 1]) ?"https://092f5820-4beb-488c-9129-7b9af341fdab-hmdatacatalog01.api.datacatalog.azure.com/catalogs/hmdatacatalog01/glossaries/hmdatacatalog01/terms/15f6bbbb-8023-46f3-a548-69ada55622e5":"NA" AS termId FROM @oldList UNION ALL
+//repeat
+SELECT tableId, columnName, !String.IsNullOrEmpty([term name n]) ?"https://092f5820-4beb-488c-9129-7b9af341fdab-hmdatacatalog01.api.datacatalog.azure.com/catalogs/hmdatacatalog01/glossaries/hmdatacatalog01/terms/d205fb2a-7525-4ae4-a18e-a4a7766bd01a":"NA" AS termId FROM @oldList;
+
+@newList = SELECT * FROM @newList WHERE termId != "NA";
+
+//we do except to not add tags when existing from before
+@toBeTagged = 
+SELECT * FROM @newList
+EXCEPT ALL BY NAME ON (tableId, columnName, termId)
+SELECT * FROM @oldList;
+
+OUTPUT @toBeTagged TO
+@out
+USING new Microsoft.Analytics.Samples.Formats.Json.JsonOutputter();
+

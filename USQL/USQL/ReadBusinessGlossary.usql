@@ -1,0 +1,138 @@
+﻿//these assemblies can be found here: https://github.com/Azure/usql/tree/master/Examples/DataFormats
+REFERENCE ASSEMBLY [Newtonsoft.Json];
+REFERENCE ASSEMBLY [Microsoft.Analytics.Samples.Formats];
+
+// Input files
+DECLARE EXTERNAL @inputBusinessGlossary string = "filename" + DateTime.UtcNow.ToString("yyyyMMdd") +".json";
+
+
+// Output files
+DECLARE EXTERNAL @outBg string = "output filename";
+
+
+//read glossary
+@businessglossary =
+    EXTRACT 
+            parentId string,
+            id string,
+            name string,
+            definition string,
+            description string
+    FROM @inputBusinessGlossary
+    USING new Microsoft.Analytics.Samples.Formats.Json.MultiLevelJsonExtractor("value[*]", true, 
+    "parentId",
+    "id", 
+    "name",
+    "definition",
+    "description"
+    );
+
+@businessglossary =
+    SELECT parentId,
+           id,
+           //code behind function to remove characters from values (see .cs file)
+           HafslundCommon.Functions.cleanString(name) AS name,
+           HafslundCommon.Functions.cleanString(definition) AS definition,
+           HafslundCommon.Functions.cleanString(description) AS description
+    FROM @businessglossary;
+
+
+@root =
+    SELECT parentId,
+           id,
+           name,
+           definition,
+           description,
+           name AS Level1Name
+    FROM @businessglossary
+    WHERE String.IsNullOrEmpty(parentId);
+
+@level2 =
+    SELECT bg.parentId,
+           bg.id,
+           bg.name,
+           bg.definition,
+           bg.description,
+           root.Level1Name,
+           bg.name AS Level2Name
+    FROM @businessglossary AS bg
+         JOIN
+             @root AS root
+         ON bg.parentId == root.id;
+
+@level3 =
+    SELECT bg.parentId,
+           bg.id,
+           bg.name,
+           bg.definition,
+           bg.description,
+           parent.Level1Name,
+           parent.Level2Name,
+           bg.name AS Level3Name
+    FROM @businessglossary AS bg
+        JOIN
+             @level2 AS parent
+         ON bg.parentId == parent.id;
+
+@level4 =
+    SELECT bg.parentId,
+           bg.id,
+           bg.name,
+           bg.definition,
+           bg.description,
+           parent.Level1Name,
+           parent.Level2Name,
+           parent.Level3Name,
+           bg.name AS Level4Name
+    FROM @businessglossary AS bg
+          JOIN
+             @level3 AS parent
+         ON bg.parentId == parent.id;
+
+@level5 =
+    SELECT bg.parentId,
+           bg.id,
+           bg.name,
+           bg.definition,
+           bg.description,
+           parent.Level1Name,
+           parent.Level2Name,
+           parent.Level3Name,
+           parent.Level4Name,
+           bg.name AS Level5Name
+    FROM @businessglossary AS bg
+         JOIN
+             @level4 AS parent
+         ON bg.parentId == parent.id;
+
+@glossary =
+    SELECT *
+    FROM @root
+    OUTER UNION BY NAME ON (*)
+    SELECT *
+    FROM @level2
+    OUTER UNION BY NAME ON (*)
+    SELECT *
+    FROM @level3
+    OUTER UNION BY NAME ON (*)
+    SELECT *
+    FROM @level4
+    OUTER UNION BY NAME ON (*)
+    SELECT *
+    FROM @level5;
+
+@glossary =
+    SELECT id.ToLower() AS id,
+           name,
+           definition,
+           description,
+           Level1Name,
+           Level2Name,
+           Level3Name,
+           Level4Name,
+           Level5Name
+    FROM @glossary;
+
+
+OUTPUT @glossary TO @outBg  
+USING Outputters.Csv(outputHeader:true);
